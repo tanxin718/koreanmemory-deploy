@@ -1,0 +1,21 @@
+# Python 环境
+venv/
+__pycache__/
+*.pyc
+*.pyo
+requirements.txt
+
+# 开发脚本和数据
+scripts/
+docs/
+deploy/
+
+# 构建产物和临时文件
+*.zip
+*.ps1
+*.bat
+*.py
+
+# 系统文件
+Thumbs.db
+.DS_Store

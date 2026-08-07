@@ -1,0 +1,43 @@
+/* KoreanMemory - 深色模式 */
+[data-theme="dark"] {
+  --color-white: #1A1721;
+  --color-card: #231F2A;
+  --color-background: #15121A;
+  --color-border: #2D2838;
+  --color-text-primary: #F0EFF4;
+  --color-text-secondary: #9B95A8;
+  --color-text-tertiary: #6B6578;
+  --color-primary: #9B87F2;
+  --color-primary-light: #B8A8F5;
+  --color-primary-50: #2D2545;
+  --color-again-bg: #3B1A1A;
+  --color-hard-bg: #3B2E0A;
+  --color-good-bg: #0A2E1F;
+  --color-easy-bg: #2D2545;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 自动跟随系统主题 */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-white: #1A1721;
+    --color-card: #231F2A;
+    --color-background: #15121A;
+    --color-border: #2D2838;
+    --color-text-primary: #F0EFF4;
+    --color-text-secondary: #9B95A8;
+    --color-text-tertiary: #6B6578;
+    --color-primary: #9B87F2;
+    --color-primary-light: #B8A8F5;
+    --color-primary-50: #2D2545;
+    --color-again-bg: #3B1A1A;
+    --color-hard-bg: #3B2E0A;
+    --color-good-bg: #0A2E1F;
+    --color-easy-bg: #2D2545;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+}
