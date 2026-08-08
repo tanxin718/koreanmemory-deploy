@@ -140,11 +140,14 @@ const TTS = {
   },
 
   // ========== 在线 TTS 兜底 ==========
-  // 多源尝试，哪个能用用哪个
+  // 多源尝试，哪个能用用哪个（国内优先）
   _buildOnlineUrls(text) {
     const q = encodeURIComponent(text);
     return [
-      // Google Translate TTS（国外服务器）
+      // 百度翻译 TTS（国内可访问，支持韩语，无需密钥）
+      // spd=3 是正常语速，数字越小越慢
+      `https://fanyi.baidu.com/gettts?lan=kor&text=${q}&spd=3&source=web`,
+      // Google Translate TTS（备用，国外服务器）
       `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=ko&q=${q}`,
       // Google Translate 香港节点
       `https://translate.google.com.hk/translate_tts?ie=UTF-8&client=tw-ob&tl=ko&q=${q}`,
@@ -174,7 +177,8 @@ const TTS = {
     }
   },
 
-  // 用 Audio 元素播放一个音频 URL
+  // 用 Audio 元素播放一个音频 URL（支持远程 URL 和 blob URL）
+  // audio 标签加载媒体资源不受 CORS 限制，可跨域播放
   _playAudio(url, rate) {
     return new Promise((resolve) => {
       try {
@@ -192,20 +196,16 @@ const TTS = {
           resolve(success);
         };
 
-        // 能播放 = 加载成功
         audio.addEventListener('playing', () => done(true), { once: true });
         audio.addEventListener('canplay', () => {
           audio.play().then(() => done(true)).catch(() => done(false));
         }, { once: true });
         audio.addEventListener('error', () => done(false), { once: true });
 
-        // 超时兜底
         setTimeout(() => done(false), 6000);
 
-        // 尝试加载
         audio.load();
         audio.play().then(() => done(true)).catch(() => {
-          // 自动播放策略可能阻止，但用户点击触发的一般可以
           done(false);
         });
       } catch (e) {
