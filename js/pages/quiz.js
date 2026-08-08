@@ -333,17 +333,9 @@ const QuizPage = {
     if (btn) btn.style.display = 'inline-flex';
   },
 
-  // ===== TTS 播放 =====
+  // ===== TTS 播放（统一走 TTS 模块，享受在线兜底）=====
   playAudio(text) {
-    if (!window.speechSynthesis) {
-      Toast.show('浏览器不支持语音播放', 'warning');
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = 'ko-KR';
-    utter.rate = 0.8;
-    window.speechSynthesis.speak(utter);
+    TTS.speak(text, 0.8);
   },
 
   // ===== 手写画板 =====
@@ -440,7 +432,7 @@ const QuizPage = {
   // ===== 返回模式选择 =====
   exitToModeSelect() {
     // 停止 TTS
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    TTS.stop();
     this.reset();
     this.renderModeSelect();
   },
