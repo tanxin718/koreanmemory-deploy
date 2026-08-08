@@ -1,45 +1,72 @@
 /**
  * KoreanMemory - 韩语发音（TTS）
  * 使用浏览器内置 Web Speech API，无需外部依赖
- * 针对移动端和桌面端做了兼容性优化
+ * 针对 iOS、安卓（vivo/OriginOS）、桌面端做了兼容性优化
  */
 
 const TTS = {
   _voices: [],
   _koreanVoice: null,
-  _unlocked: false,  // iOS 需要用户交互后才能播放
+  _unlocked: false,
+  _voicesReady: false,
+  _initRetry: 0,
 
   init() {
     if (!('speechSynthesis' in window)) {
       console.warn('[TTS] 浏览器不支持 Web Speech API');
       return;
     }
-    // 加载语音列表（部分浏览器异步加载）
+    console.log('[TTS] 初始化，speechSynthesis 可用');
+
+    // 加载语音列表（部分浏览器异步加载，需多次尝试）
     const loadVoices = () => {
       this._voices = speechSynthesis.getVoices() || [];
-      // 优先找 ko-KR，再找任何 ko 开头的
-      this._koreanVoice = this._voices.find(v => v.lang === 'ko-KR')
-        || this._voices.find(v => v.lang === 'ko_KR')
-        || this._voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko'));
-      console.log('[TTS] 可用语音数：', this._voices.length, '韩语语音：', this._koreanVoice ? this._koreanVoice.name : '未找到');
+      if (this._voices.length > 0) {
+        // 优先找 ko-KR，再找任何 ko 开头的
+        this._koreanVoice = this._voices.find(v => v.lang === 'ko-KR')
+          || this._voices.find(v => v.lang === 'ko_KR')
+          || this._voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ko'));
+        this._voicesReady = true;
+        console.log('[TTS] 可用语音数：', this._voices.length,
+          '韩语语音：', this._koreanVoice ? this._koreanVoice.name : '未找到（将使用默认语音）');
+      } else {
+        // 安卓某些机型首次获取为空，重试
+        this._initRetry++;
+        if (this._initRetry < 10) {
+          setTimeout(loadVoices, 200);
+        }
+      }
     };
     loadVoices();
     if (typeof speechSynthesis.onvoiceschanged !== 'undefined') {
       speechSynthesis.onvoiceschanged = loadVoices;
     }
-    // iOS Safari 需要在用户交互时"解锁"语音
-    // 用第一次 touchend/click 来触发一个空播放
+
+    // iOS Safari / 安卓 Chrome 都需要在用户交互时"解锁"语音
     const unlock = () => {
       if (this._unlocked) return;
-      try {
-        const u = new SpeechSynthesisUtterance('');
-        u.volume = 0;
-        speechSynthesis.speak(u);
-        this._unlocked = true;
-      } catch (e) {}
+      this._unlocked = true;
+      this._doUnlock();
     };
     document.addEventListener('touchend', unlock, { once: true, passive: true });
     document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+  },
+
+  // 解锁语音引擎（首次交互时调用一次空播放）
+  _doUnlock() {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance('');
+      u.volume = 0;
+      u.rate = 1;
+      u.lang = 'ko-KR';
+      speechSynthesis.speak(u);
+      console.log('[TTS] 语音已解锁');
+    } catch (e) {
+      console.warn('[TTS] 解锁失败:', e);
+    }
   },
 
   /**
@@ -52,9 +79,15 @@ const TTS = {
       Toast.show('当前浏览器不支持语音播放', 'warning');
       return;
     }
-    // 停止当前正在播放的语音
-    speechSynthesis.cancel();
+    if (!text) return;
 
+    // 安卓兼容：先 cancel 再 speak，避免队列堆积
+    speechSynthesis.cancel();
+    // 短暂延迟确保 cancel 完成
+    setTimeout(() => this._doSpeak(text, rate), 50);
+  },
+
+  _doSpeak(text, rate) {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'ko-KR';
     utterance.rate = rate;
@@ -74,14 +107,17 @@ const TTS = {
     utterance.onend = finishOnce;
     utterance.onerror = (e) => {
       if (e.error === 'interrupted' || e.error === 'canceled') {
-        // 正常的取消，不算错误
         return;
       }
       console.warn('[TTS] 播放失败:', e.error);
       if (e.error === 'not-allowed') {
-        Toast.show('请点击页面任意位置后再试（浏览器需要交互授权）', 'warning');
+        Toast.show('请点击页面任意位置后再试', 'warning');
       } else if (e.error === 'synthesis-failed' || e.error === 'audio-busy') {
-        Toast.show('语音引擎忙碌，请稍后再试', 'warning');
+        // 安卓常见：引擎忙碌，重试一次
+        Toast.show('语音引擎忙碌，正在重试...', 'warning');
+        setTimeout(() => this._doSpeak(text, rate), 500);
+      } else {
+        Toast.show('语音播放失败，可能缺少韩语语音包', 'warning');
       }
       finishOnce();
     };
@@ -124,7 +160,6 @@ const TTS = {
     } else {
       this.speak(text);
       if (btnEl) btnEl.classList.add('speaking');
-      // 播放结束后移除动画
       const checkEnd = setInterval(() => {
         if (!speechSynthesis.speaking) {
           if (btnEl) btnEl.classList.remove('speaking');

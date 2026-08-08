@@ -3,35 +3,18 @@
  */
 let deferredPrompt = null;
 
-// 强制卸载旧的 Service Worker（开发阶段）
+// 注册 Service Worker（PWA 必需，让应用可离线 + 独立运行）
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(registrations => {
-    registrations.forEach(reg => {
-      console.log('[PWA] 卸载旧 Service Worker:', reg.scope);
-      reg.unregister();
-    });
-  });
-  // 清除所有缓存
-  caches.keys().then(keys => {
-    keys.forEach(k => {
-      console.log('[PWA] 删除缓存:', k);
-      caches.delete(k);
-    });
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(registration => {
+        console.log('[PWA] Service Worker 注册成功:', registration.scope);
+      })
+      .catch(err => {
+        console.warn('[PWA] Service Worker 注册失败:', err);
+      });
   });
 }
-
-// 注册 Service Worker（部署时取消注释）
-// if ('serviceWorker' in navigator) {
-//   window.addEventListener('load', () => {
-//     navigator.serviceWorker.register('./sw.js')
-//       .then(registration => {
-//         console.log('[PWA] Service Worker 注册成功:', registration.scope);
-//       })
-//       .catch(err => {
-//         console.warn('[PWA] Service Worker 注册失败:', err);
-//       });
-//   });
-// }
 
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

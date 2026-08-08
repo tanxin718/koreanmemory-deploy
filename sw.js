@@ -2,9 +2,9 @@
  * KoreanMemory - Service Worker
  * 缓存静态资源，实现离线可用
  */
-const CACHE_NAME = 'korean-memory-v15';
-const STATIC_CACHE = 'korean-memory-static-v15';
-const DATA_CACHE = 'korean-memory-data-v15';
+const CACHE_NAME = 'korean-memory-v16';
+const STATIC_CACHE = 'korean-memory-static-v16';
+const DATA_CACHE = 'korean-memory-data-v16';
 
 // 需要预缓存的静态资源
 const STATIC_ASSETS = [
@@ -44,6 +44,8 @@ const STATIC_ASSETS = [
   './icons/illustration-empty-review.jpg',
   './icons/illustration-celebrate.jpg',
   './icons/mascot-character.jpg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
   './data/korean.db',
   './lib/all.min.css',
   './lib/webfonts/fa-solid-900.woff2',
