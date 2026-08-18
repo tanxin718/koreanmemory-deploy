@@ -26,6 +26,8 @@ const LOG_KEY = 'km_points_log';
 const SHOP_KEY = 'km_shop_items';       // 统一商品存储（合并系统+自定义）
 const INVENTORY_KEY = 'km_inventory';
 const RULES_KEY = 'km_points_rules';   // 自定义积分规则
+const PENDING_KEY = 'km_pending_points'; // 每日待结算积分（日测验通过后发放）
+const DAILY_QUIZ_KEY = 'km_daily_quiz';  // 每日测验状态
 
 // ===== 商城图标库 =====
 const SHOP_ICON_LIBRARY = {
@@ -130,7 +132,9 @@ const DEFAULT_POINTS_RULES = {
   review_batch: { label: '完成一轮复习', value: 30, desc: '完成一轮复习任务' },
   quiz_correct: { label: '测试答对', value: 5, desc: '测试每答对一题' },
   quiz_batch: { label: '完成一轮测试', value: 25, desc: '完成一轮测试任务' },
-  quiz_perfect: { label: '全对额外奖励', value: 15, desc: '一轮测试全对额外奖励' }
+  quiz_perfect: { label: '全对额外奖励', value: 15, desc: '一轮测试全对额外奖励' },
+  daily_quiz_pass: { label: '日测验通过奖励', value: 20, desc: '日测验通过额外加' },
+  daily_quiz_fail_ratio: { label: '日测验未通过比例', value: 0.5, desc: '未通过只能获得待结算的比例（0.5=一半）' }
 };
 
 function getPointsRules() {
@@ -187,9 +191,120 @@ function setPoints(val) {
 
 function addPoints(amount, reason) {
   const current = getPoints();
+  // 日测验结算/奖励直接进总积分，不再二次入待结算池
+  const skipPending = reason && (
+    reason.includes('日测验') || reason.includes('结算') ||
+    reason.includes('商城') || reason.includes('兑换')
+  );
+  if (!skipPending && amount > 0) {
+    addPendingPoints(amount);
+  }
   setPoints(current + amount);
   addPointsLog(amount, reason);
   return current + amount;
+}
+
+// ===== 每日待结算积分 =====
+// 今日学习/测试赚的积分先进入待结算池，日测验通过后"确认"，未通过按比例确认
+
+function getTodayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+function getPendingData() {
+  try {
+    const data = JSON.parse(localStorage.getItem(PENDING_KEY));
+    if (data && data.date === getTodayStr()) return data;
+  } catch {}
+  return { date: getTodayStr(), pending: 0, confirmed: 0 };
+}
+
+function savePendingData(data) {
+  localStorage.setItem(PENDING_KEY, JSON.stringify(data));
+}
+
+function addPendingPoints(amount) {
+  const data = getPendingData();
+  data.pending = (data.pending || 0) + amount;
+  savePendingData(data);
+}
+
+// 日测验通过：待结算积分全部「确认」，再加通过奖励
+function settleDailyQuiz(pass, correct, total) {
+  const data = getPendingData();
+  const pending = data.pending || 0;
+  let confirmed = 0;
+  let bonus = 0;
+  let info = {};
+
+  if (pass) {
+    confirmed = pending;
+    bonus = POINTS_RULES.daily_quiz_pass || 20;
+    if (confirmed > 0) {
+      addPoints(bonus, '日测验通过奖励');
+    } else {
+      // 今日没有待结算积分，奖励还是给，但记为"通过奖励"
+      addPoints(bonus, '日测验通过奖励');
+    }
+    data.confirmed = (data.confirmed || 0) + confirmed;
+    data.pending = 0;
+  } else {
+    const ratio = POINTS_RULES.daily_quiz_fail_ratio || 0.5;
+    confirmed = Math.floor(pending * ratio);
+    const loss = pending - confirmed;
+    if (loss > 0) {
+      // 从总积分中扣掉"未确认"的部分（因为addPoints时已经全额加进总积分了）
+      setPoints(getPoints() - loss);
+      addPointsLog(-loss, `日测验未通过，扣减待结算(${correct}/${total}正确)`);
+    }
+    data.confirmed = (data.confirmed || 0) + confirmed;
+    data.pending = 0;
+  }
+
+  savePendingData(data);
+  return { confirmed, bonus, totalPending: pending };
+}
+
+// ===== 每日测验状态 =====
+// status: 'pending' 未开始, 'started' 进行中, 'passed' 已通过, 'failed' 未通过
+function getDailyQuizData() {
+  try {
+    const data = JSON.parse(localStorage.getItem(DAILY_QUIZ_KEY));
+    if (data && data.date === getTodayStr()) return data;
+  } catch {}
+  return {
+    date: getTodayStr(),
+    status: 'pending',  // pending / started / passed / failed
+    totalQuestions: 10,
+    correct: 0,
+    wrong: 0,
+    passThreshold: 7, // 10题答对7题为通过
+    startedAt: null,
+    finishedAt: null,
+    currentIndex: 0,
+    questions: null
+  };
+}
+
+function saveDailyQuizData(data) {
+  localStorage.setItem(DAILY_QUIZ_KEY, JSON.stringify(data));
+}
+
+function isDailyQuizAvailable() {
+  const d = getDailyQuizData();
+  return d.status === 'pending' || d.status === 'started';
+}
+
+function isDailyQuizFinished() {
+  const d = getDailyQuizData();
+  return d.status === 'passed' || d.status === 'failed';
+}
+
+// ===== 辅助 =====
+
+function formatPointsLog() {
+  const log = getPointsLog();
+  return log.slice(0, 30);
 }
 
 function spendPoints(amount) {
@@ -398,11 +513,4 @@ function getCardImage(icon) {
     'fa-charging-station': 'icons/reward-digital.jpg'
   };
   return iconMap[key] || 'icons/reward-gift.jpg';
-}
-
-// ===== 辅助 =====
-
-function formatPointsLog() {
-  const log = getPointsLog();
-  return log.slice(0, 30);
 }

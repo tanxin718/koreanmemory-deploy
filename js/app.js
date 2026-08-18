@@ -16,7 +16,8 @@ const App = {
     'settings': 'SettingsPage',
     'topics': 'TopicsPage',
     'quiz': 'QuizPage',
-    'points': 'PointsPage'
+    'points': 'PointsPage',
+    'daily-quiz': 'DailyQuizPage'
   },
   
   currentPage: null,
@@ -121,7 +122,8 @@ const App = {
       'settings': '设置',
       'topics': '场景分类',
       'quiz': '测试',
-      'points': '积分中心'
+      'points': '积分中心',
+      'daily-quiz': '每日测验'
     };
     
     const title = titles[route] || 'KoreanMemory';

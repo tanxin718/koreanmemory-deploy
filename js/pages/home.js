@@ -55,6 +55,8 @@ const HomePage = {
         </div>
       ` : ''}
 
+      ${this.renderDailyQuizCard()}
+
       ${dailyQuote ? `
         <div class="card daily-word-card" id="daily-quote-card" style="margin-bottom: var(--space-md); cursor: default;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
@@ -123,6 +125,69 @@ const HomePage = {
     if (hour < 18) return '좋은 오후예요! 🌤️';
     if (hour < 22) return '좋은 저녁이에요! 🌙';
     return '안녕히 주무세요! 💤';
+  },
+
+  renderDailyQuizCard() {
+    const data = getDailyQuizData();
+    const pending = getPendingData().pending || 0;
+    const hour = new Date().getHours();
+    const isNight = hour >= 18 || hour < 4; // 18:00 ~ 04:00 为晚间时段
+
+    if (data.status === 'passed') {
+      return `
+        <div class="card" style="margin-bottom: var(--space-md); background: linear-gradient(135deg, #D1FAE5, #EDE9FE); border-color: var(--color-success);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <div style="font-weight: 600; color: var(--color-success);">🌙 每日测验 · 已通过 ✅</div>
+              <div style="font-size: var(--text-sm); color: var(--color-text-secondary);">
+                正确 ${data.correct}/${data.totalQuestions} · 待结算积分已确认
+              </div>
+            </div>
+            <i class="fa-solid fa-check-circle" style="color: var(--color-success); font-size: 20px;"></i>
+          </div>
+        </div>
+      `;
+    }
+
+    if (data.status === 'failed') {
+      return `
+        <div class="card" style="margin-bottom: var(--space-md); background: linear-gradient(135deg, #FEE2E2, #FEF3C7); border-color: var(--color-warning);">
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <div style="font-weight: 600; color: var(--color-warning);">🌙 每日测验 · 未通过</div>
+              <div style="font-size: var(--text-sm); color: var(--color-text-secondary);">
+                正确 ${data.correct}/${data.totalQuestions} · 仅结算一半今日积分
+              </div>
+            </div>
+            <i class="fa-solid fa-circle-exclamation" style="color: var(--color-warning); font-size: 20px;"></i>
+          </div>
+        </div>
+      `;
+    }
+
+    // 未完成状态（pending 或 started）
+    const bannerBg = isNight
+      ? 'linear-gradient(135deg, #C7D2FE, #EDE9FE)' // 晚上：深夜蓝紫
+      : 'linear-gradient(135deg, #FEF3C7, #EDE9FE)'; // 白天：橙黄渐变
+    const badgeText = isNight ? '🌙 到晚上啦，来做结算测验！' : `🪙 今日待结算 ${pending} 分`;
+
+    return `
+      <div class="card card-clickable" onclick="App.navigate('daily-quiz')"
+           style="margin-bottom: var(--space-md); background: ${bannerBg}; border-color: var(--color-primary);">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 600; color: var(--color-primary);">🌙 每日测验 ${isNight ? '🔥' : ''}</div>
+            <div style="font-size: var(--text-sm); color: var(--color-text-secondary);">
+              ${badgeText}
+            </div>
+            <div style="font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: 2px;">
+              10题 ≥7题通过 · 待结算全额到账 + 奖励 20 分
+            </div>
+          </div>
+          <i class="fa-solid fa-chevron-right" style="color: var(--color-text-tertiary);"></i>
+        </div>
+      </div>
+    `;
   },
 
   _currentQuoteIndex: -1,
