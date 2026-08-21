@@ -40,10 +40,12 @@ const LLM = {
     return location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '0.0.0.0';
   },
 
-  // 计算 AI 端点：本地点 /api/zhipu，手机填的 worker 地址
+  // 计算 AI 端点：本地点 /api/zhipu；手机填 Cloudflare Worker 根地址，自动补 /api/zhipu
   endpoint() {
     if (this.isLocal()) return '/api/zhipu';
-    return (this.getConfig().workerUrl || '').replace(/\/+$/, '');
+    let ep = (this.getConfig().workerUrl || '').replace(/\/+$/, '');
+    if (ep && !/\/api\/zhipu$/i.test(ep)) ep += '/api/zhipu';
+    return ep;
   },
 
   // 是否已配置可用
