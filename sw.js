@@ -2,9 +2,9 @@
  * KoreanMemory - Service Worker
  * 缓存静态资源，实现离线可用
  */
-const CACHE_NAME = 'korean-memory-v19';
-const STATIC_CACHE = 'korean-memory-static-v19';
-const DATA_CACHE = 'korean-memory-data-v19';
+const CACHE_NAME = 'korean-memory-v20';
+const STATIC_CACHE = 'korean-memory-static-v20';
+const DATA_CACHE = 'korean-memory-data-v20';
 
 // 需要预缓存的静态资源
 const STATIC_ASSETS = [
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   './js/sm2.js',
   './js/points.js',
   './js/tts.js',
+  './js/llm.js',
   './js/quotes.js',
   './js/pwa.js',
   './js/app.js',

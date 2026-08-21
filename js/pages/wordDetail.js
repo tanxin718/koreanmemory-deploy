@@ -72,6 +72,16 @@ const WordDetailPage = {
       ${examples.length > 0 ? this.renderExampleSection(examples) : ''}
       
       ${relations.length > 0 ? this.renderRelationSection(relations) : ''}
+
+      <!-- AI 校对 -->
+      <div class="detail-section">
+        <div class="detail-section__title">🔎 AI 校对</div>
+        <div id="ai-proof-container">
+          <button class="btn-secondary" onclick="WordDetailPage.aiProof()" style="width:100%; padding: var(--space-sm);">
+            <i class="fa-solid fa-magnifying-glass"></i> 让 AI 检查释义 / 发音是否准确
+          </button>
+        </div>
+      </div>
       
       <div class="detail-section">
         <div class="detail-section__title">📝 我的笔记</div>
@@ -207,5 +217,82 @@ const WordDetailPage = {
     const content = document.getElementById('note-editor').value;
     saveNote(this.state.wordId, content);
     showToast('笔记已保存');
+  },
+
+  // ===== AI 校对 =====
+  async aiProof() {
+    const el = document.getElementById('ai-proof-container');
+    if (!el) return;
+    if (!LLM.isConfigured()) {
+      showToast('请先在设置中配置 AI 助手', 'warning');
+      App.navigate('settings');
+      return;
+    }
+    const { word, meanings, examples } = this.state.detail;
+    const meaningText = meanings.map(m => m.meaning).join('、');
+    const exampleText = examples.map(e => `- ${e.korean} / ${e.translation}`).join('\n');
+    el.innerHTML = `<div style="font-size:13px;color:var(--color-text-secondary);text-align:center;padding:8px;">⏳ AI 正在校对...</div>`;
+    showToast('AI 校对中，请稍候', 'info');
+    try {
+      const gen = await LLM.chat(
+        '你是精通韩语与中文的校对专家。请核查一个韩语单词条目的真实性。',
+        `请核对以下韩语单词条目，判断释义、发音、例句是否有错误或可改进之处。\n\n词条：${word.word}\n发音：${word.pronunciation || '无'}\n当前释义：${meaningText}\n当前例句：\n${exampleText || '无'}\n\n请严格输出 JSON（不要 markdown）：\n{"ok":true/false 含义是否准确,"issues":["问题1","问题2"...] 若准确则为空数组,"suggested_meaning":"修正后的标准中文释义，若无需修正则为null","suggested_examples":[{"ko":"韩语例句","zh":"中文翻译"}] 给出更地道的1-3个，若无需则空数组,"note":"给学习者的一句话提醒（若有错误时）"}`,
+        { json: true, temperature: 0.2 }
+      );
+      const hasFix = !gen.ok || (gen.suggested_meaning && gen.suggested_meaning !== meaningText);
+      el.innerHTML = `
+        <div style="font-size:14px; font-weight:600; margin-bottom:8px;">
+          ${gen.ok ? '✅ 该词条基本准确' : '⚠️ 发现可能的问题'}
+        </div>
+        ${gen.issues && gen.issues.length ? `
+          <div style="font-size:13px; color:var(--color-danger); margin-bottom:8px; line-height:1.6;">${gen.issues.map(i => '• ' + i).join('<br>')}</div>
+        ` : ''}
+        ${gen.note ? `<div style="font-size:13px; color:var(--color-text-secondary); margin-bottom:8px; line-height:1.6;">💡 ${gen.note}</div>` : ''}
+        ${gen.suggested_meaning && gen.suggested_meaning !== meaningText ? `
+          <div style="font-size:13px; margin-bottom:6px;"><b>建议释义：</b> ${gen.suggested_meaning}</div>
+        ` : ''}
+        ${hasFix ? `
+          <button class="btn-primary" onclick="WordDetailPage.applyFix()" style="width:100%; padding:var(--space-sm); margin-top:6px;">
+            <i class="fa-solid fa-check"></i> 采纳修正（保存到本机）
+          </button>
+        ` : ''}
+        <button class="btn-secondary" onclick="WordDetailPage.aiProof()" style="width:100%; padding:var(--space-sm); margin-top:6px;">
+          <i class="fa-solid fa-rotate"></i> 重新校对
+        </button>
+      `;
+      this._lastProof = gen;
+    } catch (e) {
+      el.innerHTML = `<button class="btn-secondary" onclick="WordDetailPage.aiProof()" style="width:100%; padding:var(--space-sm);">AI 校对失败，重试</button>`;
+      showToast('AI 校对失败：' + e.message, 'error');
+    }
+  },
+
+  applyFix() {
+    const gen = this._lastProof;
+    if (!gen) return;
+    const id = this.state.wordId;
+    const fix = {
+      meaning: gen.suggested_meaning || null,
+      examples: (gen.suggested_examples && gen.suggested_examples.length)
+        ? gen.suggested_examples.map(e => ({ ko: e.ko, zh: e.zh }))
+        : null,
+      suggestedBy: 'ai',
+      appliedAt: new Date().toISOString()
+    };
+    saveWordFix(id, fix);
+    showToast('已保存修正（本机生效）✓', 'success');
+    // 重新加载详情
+    this.state.detail = getWordDetail(id);
+    this.render();
+  },
+
+  resetFix() {
+    const fix = getWordFix(this.state.wordId);
+    if (!fix) { showToast('该词没有本机修正'); return; }
+    if (!confirm('要撤销本机对该词的修正吗？')) return;
+    removeWordFix(this.state.wordId);
+    this.state.detail = getWordDetail(this.state.wordId);
+    this.render();
+    showToast('已撤销修正');
   }
 };

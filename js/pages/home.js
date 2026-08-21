@@ -73,6 +73,9 @@ const HomePage = {
               <button class="tts-btn" onclick="HomePage.showAddQuoteForm()" title="添加金句" style="width:28px;height:28px;font-size:var(--text-xs);">
                 <i class="fa-solid fa-plus"></i>
               </button>
+              <button class="tts-btn" onclick="HomePage.aiGenerateQuote()" title="AI 生成新金句" style="width:28px;height:28px;font-size:var(--text-xs); color:var(--color-primary);">
+                <i class="fa-solid fa-wand-magic-sparkles"></i>
+              </button>
             </div>
           </div>
           <div id="quote-ko-text" style="font-size: var(--text-lg); font-weight: 600; color: var(--color-text-primary); line-height: 1.6; font-family: var(--font-korean);">${dailyQuote.ko}</div>
@@ -192,6 +195,62 @@ const HomePage = {
 
   _currentQuoteIndex: -1,
 
+  async aiGenerateQuote() {
+    const card = document.getElementById('daily-quote-card');
+    if (!card) return;
+    if (!LLM.isConfigured()) {
+      showToast('请先在设置中配置 AI 助手', 'warning');
+      App.navigate('settings');
+      return;
+    }
+    // 先显示生成中状态
+    card.querySelector('#quote-ko-text').textContent = '⏳ 正在生成新金句...';
+    const zhEl = card.querySelector('div:last-child');
+    if (zhEl) zhEl.textContent = '';
+    try {
+      const gen = await LLM.chat(
+        '你是韩语学习助教，擅长生成地道的韩国谚语/小知识/笑话/脑筋急转弯。',
+        `请随机生成一条适合韩国语学习者的"今日金句"，要求在四种题材中任选其一：名言谚语、韩国小知识趣闻、韩语笑话、脑筋急转弯（脑筋急转弯要利用韩语双关）。
+请严格以 JSON 格式输出（不要 markdown），字段：
+{"type":"quote|trivia|joke|riddle","ko":"韩语原文，要地道自然、适合初中级学习者","zh":"中文翻译或解释，要准确易懂","note":"一句话为什么这个适合学习"}
+其中脑筋急转弯时 ko 里要同时带问题和答案。`,
+        { json: true, temperature: 0.9 }
+      );
+      const type = gen.type || 'quote';
+      const iconMap = { quote: 'fa-quote-left', trivia: 'fa-lightbulb', joke: 'fa-face-laugh-squint', riddle: 'fa-puzzle-piece' };
+      const titleMap = { quote: '名言', trivia: '小知识', joke: '笑话', riddle: '脑筋急转弯' };
+      const q = { type, icon: iconMap[type] || 'fa-star', title: titleMap[type] || 'AI', ko: gen.ko, zh: gen.zh, custom: true, ai: true };
+      // 展示
+      card.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--space-sm);">
+          <div style="font-size: var(--text-sm); color: var(--color-text-tertiary);">
+            <i class="fa-solid ${q.icon}" style="margin-right: 4px;"></i> ${q.title} ✨AI 生成
+          </div>
+          <div style="display: flex; gap: var(--space-xs);">
+            <button class="tts-btn" onclick="event.stopPropagation(); TTS.toggle(document.getElementById('quote-ko-text').textContent, this)" title="朗读" style="width:28px;height:28px;font-size:var(--text-xs);">
+              <i class="fa-solid fa-volume-high"></i>
+            </button>
+            <button class="tts-btn" onclick="HomePage.refreshQuote()" title="换一条" style="width:28px;height:28px;font-size:var(--text-xs);">
+              <i class="fa-solid fa-shuffle"></i>
+            </button>
+            <button class="tts-btn" onclick="HomePage.showAddQuoteForm()" title="添加金句" style="width:28px;height:28px;font-size:var(--text-xs);">
+              <i class="fa-solid fa-plus"></i>
+            </button>
+            <button class="tts-btn" onclick="HomePage.aiGenerateQuote()" title="AI 生成新金句" style="width:28px;height:28px;font-size:var(--text-xs); color:var(--color-primary);">
+              <i class="fa-solid fa-wand-magic-sparkles"></i>
+            </button>
+          </div>
+        </div>
+        <div id="quote-ko-text" style="font-size: var(--text-lg); font-weight: 600; color: var(--color-text-primary); line-height: 1.6; font-family: var(--font-korean);">${q.ko}</div>
+        <div style="font-size: var(--text-sm); color: var(--color-text-secondary); margin-top: var(--space-sm); line-height: 1.6;">${q.zh}</div>
+        ${gen.note ? `<div style="font-size: var(--text-xs); color: var(--color-text-tertiary); margin-top: var(--space-sm);">💡 ${gen.note}</div>` : ''}
+      `;
+    } catch (e) {
+      card.querySelector('#quote-ko-text').textContent = '生成失败，请重试或检查 AI 配置';
+      showToast('AI 生成失败：' + e.message, 'error');
+    }
+  },
+
   refreshQuote() {
     const q = getRandomQuote(this._currentQuoteIndex);
     if (!q) return;
@@ -215,6 +274,9 @@ const HomePage = {
           </button>
           <button class="tts-btn" onclick="HomePage.showAddQuoteForm()" title="添加金句" style="width:28px;height:28px;font-size:var(--text-xs);">
             <i class="fa-solid fa-plus"></i>
+          </button>
+          <button class="tts-btn" onclick="HomePage.aiGenerateQuote()" title="AI 生成新金句" style="width:28px;height:28px;font-size:var(--text-xs); color:var(--color-primary);">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
           </button>
         </div>
       </div>

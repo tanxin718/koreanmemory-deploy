@@ -10,7 +10,8 @@ const QuizPage = {
     currentIndex: 0,
     correct: 0,
     wrong: 0,
-    answered: false
+    answered: false,
+    wrongWords: []       // 记录错题词，供 AI 讲解
   },
 
   init() {
@@ -19,7 +20,7 @@ const QuizPage = {
   },
 
   reset() {
-    this.state = { mode: null, questions: [], currentIndex: 0, correct: 0, wrong: 0, answered: false };
+    this.state = { mode: null, questions: [], currentIndex: 0, correct: 0, wrong: 0, answered: false, wrongWords: [] };
   },
 
   // ===== 模式选择 =====
@@ -295,6 +296,7 @@ const QuizPage = {
       Toast.show(`+${POINTS_RULES.quiz_correct} 积分 ✨`, 'success');
     } else {
       this.state.wrong++;
+      this.state.wrongWords.push(q.word);
       Toast.show(`正确答案：${q.answer}`, 'warning');
     }
 
@@ -325,6 +327,7 @@ const QuizPage = {
       Toast.show(`+${POINTS_RULES.quiz_correct} 积分 ✨`, 'success');
     } else {
       this.state.wrong++;
+      this.state.wrongWords.push(q.word);
       feedback.innerHTML = `<div class="quiz-feedback wrong">❌ 正确答案：<span style="font-family: var(--font-korean); font-weight: 700;">${q.word.word}</span></div>`;
     }
 
@@ -424,6 +427,7 @@ const QuizPage = {
       Toast.show(`+${POINTS_RULES.quiz_correct} 积分 ✨`, 'success');
     } else {
       this.state.wrong++;
+      this.state.wrongWords.push(q.word);
     }
     const btn = document.getElementById('quiz-next-btn');
     if (btn) btn.style.display = 'inline-flex';
@@ -496,7 +500,43 @@ const QuizPage = {
           <button class="btn-primary" onclick="QuizPage.startQuiz('${this.state.mode}')">再来一轮</button>
           <button class="btn-secondary" onclick="QuizPage.init()">换模式</button>
         </div>
+
+        ${this.state.wrongWords.length > 0 ? `
+          <div style="margin-top: var(--space-lg);">
+            <button class="btn-primary" onclick="QuizPage.aiExplainWrong()" style="width:100%; background: linear-gradient(135deg, #7C65EF, #4F46E5); border:none;">
+              <i class="fa-solid fa-wand-magic-sparkles"></i> 🤖 让 AI 讲解 ${this.state.wrongWords.length} 个错词
+            </button>
+            <div id="quiz-ai-explain" style="margin-top: var(--space-md); text-align:left; font-size: var(--text-sm); color: var(--color-text-secondary); line-height: 1.7;"></div>
+          </div>
+        ` : ''}
       </div>
     `;
+  },
+
+  async aiExplainWrong() {
+    const el = document.getElementById('quiz-ai-explain');
+    if (!el) return;
+    if (!LLM.isConfigured()) {
+      showToast('请先在设置中配置 AI 助手', 'warning');
+      App.navigate('settings');
+      return;
+    }
+    if (this.state.wrongWords.length === 0) return;
+    const words = this.state.wrongWords;
+    el.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);">⏳ AI 正在讲解错词...</div>';
+    const listText = words.map(w => {
+      const d = getWordDetail(w.id);
+      const m = d ? d.meanings.map(x => x.meaning).join('、') : '';
+      return `${w.word}（${m}）`;
+    }).join('\n');
+    try {
+      const text = await LLM.chat(
+        '你是韩语教学专家，善于用中文讲解韩语单词。回答简明、口语化。',
+        `以下是我在这次韩语测验中答错的单词，请逐个用简短中文讲解，帮我把它们记牢：\n${listText}\n\n对每个词讲：含义、常见搭配/例句、与容易混淆之处的注意点。用列表形式，简洁。`
+      );
+      el.innerHTML = text.replace(/\n/g, '<br>');
+    } catch (e) {
+      el.innerHTML = '<div style="color:var(--color-danger);">AI 讲解失败：' + e.message + '</div>';
+    }
   }
 };

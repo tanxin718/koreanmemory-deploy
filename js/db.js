@@ -235,6 +235,24 @@ function getWordDetail(id) {
   const isFavorite = query('SELECT * FROM favorites WHERE word_id = ? AND user_id = 1', [id]).length > 0;
   const note = query('SELECT * FROM notes WHERE word_id = ? AND user_id = 1', [id])[0];
   
+  // 应用 AI 纠错覆盖（若存在）
+  const fix = getWordFix(id);
+  if (fix) {
+    if (fix.meaning && Array.isArray(fix.meanings)) {
+      // fix.meanings 为标准行结构
+      // 支持：直接提供 [{meaning}] 数组
+    } else if (fix.meaning) {
+      meanings.length = 0;
+      meanings.push({ language: 'zh', meaning: fix.meaning, order_index: 1 });
+    }
+    if (fix.examples && Array.isArray(fix.examples)) {
+      examples.length = 0;
+      fix.examples.forEach((ex, i) => {
+        examples.push({ korean: ex.ko, translation: ex.zh, order_index: i + 1 });
+      });
+    }
+  }
+
   return { word, meanings, examples, conjugations, hanja, relations, review, isFavorite, note };
 }
 
@@ -605,6 +623,43 @@ async function importCSVFromText(csvText) {
   }
 
   return { success, skipped, errors };
+}
+
+// ========== AI 纠错存储（localStorage 覆盖展示）==========
+
+const WORD_FIX_KEY = 'km_word_fixes';
+
+// 读取某词的 AI 纠错覆盖（未纠错返回 null）
+function getWordFix(id) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WORD_FIX_KEY)) || {};
+    return all[String(id)] || null;
+  } catch { return null; }
+}
+
+// 保存 AI 纠错覆盖：{ meaning, examples: [{ko,zh}...], suggestedBy: 'ai'|'manual' }
+function saveWordFix(id, fix) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WORD_FIX_KEY)) || {};
+    all[String(id)] = fix;
+    localStorage.setItem(WORD_FIX_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+// 删除某词的 AI 纠错覆盖
+function removeWordFix(id) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WORD_FIX_KEY)) || {};
+    delete all[String(id)];
+    localStorage.setItem(WORD_FIX_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+// 获取被用户标记过"已纠错"的词 id 集合（用于统计）
+function getFixedWordIds() {
+  try {
+    return Object.keys(JSON.parse(localStorage.getItem(WORD_FIX_KEY)) || {});
+  } catch { return []; }
 }
 
 // ========== 加载状态 ==========

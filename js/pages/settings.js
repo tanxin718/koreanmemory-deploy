@@ -11,12 +11,45 @@ const SettingsPage = {
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
     const dailyGoal = this.getDailyGoal();
 
+    const llm = LLM.getConfig();
+    const llmReady = llm.enabled && llm.key;
+    const local = LLM.isLocal();
+
     container.innerHTML = `
       <div class="settings-section">
         <div class="settings-section__title">学习</div>
         <div class="settings-item" onclick="SettingsPage.setDailyGoal()">
           <span class="settings-item__label">每日目标</span>
           <span class="settings-item__value">${dailyGoal} 个单词 <i class="fa-solid fa-chevron-right settings-item__icon"></i></span>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-section__title">AI 助手（GLM-4-Flash 免费）</div>
+        <div class="settings-item" onclick="SettingsPage.editAI()" style="${llmReady ? '' : 'background: #FEF3C7;'}">
+          <span class="settings-item__label">
+            ${llmReady ? '🤖 已开启' : '🤖 点击配置'}
+            ${local ? '<div style="font-size:11px;color:var(--color-text-tertiary);">本地模式 · 零配置代理</div>' : ''}
+          </span>
+          <span class="settings-item__value">
+            ${llmReady ? `<span style="color:var(--color-success);">已连接</span>` : `<span style="color:var(--color-warning);">未配置</span>`}
+            <i class="fa-solid fa-chevron-right settings-item__icon"></i>
+          </span>
+        </div>
+        ${!local && !llm.workerUrl ? `
+          <div style="padding: var(--space-sm) var(--space-md); font-size: var(--text-xs); color: var(--color-warning);">
+            手机端需要填 Cloudflare Worker 地址，详见 <code>worker-zhipu.js</code> 顶部教程
+          </div>
+        ` : ''}
+        ${llmReady ? `
+          <div class="settings-item" onclick="SettingsPage.testAI()">
+            <span class="settings-item__label">测试连接</span>
+            <span class="settings-item__value"><i class="fa-solid fa-vial" style="color:var(--color-primary);"></i></span>
+          </div>
+        ` : ''}
+        <div class="settings-item" onclick="SettingsPage.manageFixes()">
+          <span class="settings-item__label">AI 已纠错的词</span>
+          <span class="settings-item__value">${getFixedWordIds().length} 个 <i class="fa-solid fa-chevron-right settings-item__icon"></i></span>
         </div>
       </div>
 
@@ -188,6 +221,8 @@ const SettingsPage = {
     localStorage.removeItem('km_inventory');
     localStorage.removeItem('km_points_rules');
     localStorage.removeItem('km_custom_quotes');
+    localStorage.removeItem(WORD_FIX_KEY);
+    localStorage.removeItem(LLM.storeKey);
 
     showToast('所有数据已重置');
     this.render();
@@ -198,6 +233,120 @@ const SettingsPage = {
       await installPWA();
     } else {
       showToast('请通过浏览器菜单安装到桌面');
+    }
+  },
+
+  // ===== AI 配置 =====
+  editAI() {
+    const cfg = LLM.getConfig();
+    const local = LLM.isLocal();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:var(--space-md);';
+    const cardStyle = 'background:var(--color-white);border-radius:var(--radius-lg);width:420px;max-width:100%;max-height:90vh;overflow-y:auto;padding:20px;box-shadow:var(--shadow-lg);';
+    overlay.innerHTML = `
+      <div style="${cardStyle}">
+        <h3 style="margin:0 0 12px;font-size:18px;">🤖 AI 助手配置</h3>
+        <p style="font-size:13px;color:var(--color-text-secondary);margin:0 0 14px;line-height:1.7;">
+          用智谱 GLM-4-Flash（<b>永久免费</b>）。先到 <a href="https://open.bigmodel.cn" target="_blank">open.bigmodel.cn</a>
+          注册 → 控制台 → API Keys 创建密钥，粘贴到下面。
+        </p>
+
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">API Key</label>
+          <input type="password" id="ai-key" value="${cfg.key}" placeholder="xxxxx.yyyyy.zzzzz"
+            style="width:100%;padding:10px 12px;border:2px solid var(--color-border);border-radius:12px;font-size:14px;box-sizing:border-box;">
+        </div>
+
+        ${!local ? `
+        <div style="margin-bottom:12px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">Cloudflare Worker 地址（手机端）</label>
+          <input type="url" id="ai-worker" value="${cfg.workerUrl}" placeholder="https://xxx.用户名.workers.dev"
+            style="width:100%;padding:10px 12px;border:2px solid var(--color-border);border-radius:12px;font-size:13px;box-sizing:border-box;">
+          <div style="font-size:12px;color:var(--color-text-tertiary);margin-top:4px;">
+            手机/GitHub Pages 用；填了 worker-zhipu.js 部署后的地址。电脑本地可不填。
+          </div>
+        </div>
+        ` : ''}
+
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;margin-bottom:12px;cursor:pointer;">
+          <input type="checkbox" id="ai-enabled" ${cfg.enabled ? 'checked' : ''} style="width:18px;height:18px;">
+          启用 AI 功能
+        </label>
+
+        <button class="btn-primary" onclick="SettingsPage.saveAI()" style="width:100%;padding:12px;">保存</button>
+        <button class="btn-secondary" onclick="this.closest('.modal-overlay').remove()" style="width:100%;margin-top:8px;padding:12px;">取消</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  },
+
+  saveAI() {
+    const cfg = {
+      key: (document.getElementById('ai-key')?.value || '').trim(),
+      workerUrl: (document.getElementById('ai-worker')?.value || '').trim(),
+      enabled: document.getElementById('ai-enabled')?.checked || false,
+      model: LLM.getConfig().model || LLM.defaultModel
+    };
+    LLM.saveConfig(cfg);
+    document.querySelector('.modal-overlay')?.remove();
+    showToast(cfg.enabled && cfg.key ? 'AI 已保存并启用 🎉' : 'AI 配置已保存');
+    this.render();
+  },
+
+  // ===== 管理 AI 纠错 =====
+  manageFixes() {
+    const ids = getFixedWordIds();
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;padding:var(--space-md);';
+    let listHtml = '';
+    if (ids.length === 0) {
+      listHtml = '<div style="text-align:center;color:var(--color-text-tertiary);padding:20px;">还没有 AI 纠错记录<br>去词库详情页点"AI 校对"试试</div>';
+    } else {
+      listHtml = ids.map(id => {
+        const fix = getWordFix(id);
+        const w = query('SELECT word FROM words WHERE id = ?', [parseInt(id)])[0];
+        return `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 0;border-bottom:1px solid var(--color-border);">
+            <div style="flex:1;min-width:0;">
+              <div style="font-weight:600;font-size:14px;">${w ? w.word : '#' + id}</div>
+              ${fix.meaning ? `<div style="font-size:12px;color:var(--color-text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fix.meaning}</div>` : ''}
+            </div>
+            <button onclick="SettingsPage.revertFix(${id})" style="flex-shrink:0;border:none;background:var(--color-bg-secondary);color:var(--color-danger);border-radius:8px;padding:6px 10px;font-size:12px;">撤销</button>
+          </div>
+        `;
+      }).join('');
+    }
+    overlay.innerHTML = `
+      <div style="background:var(--color-white);border-radius:var(--radius-lg);width:420px;max-width:100%;max-height:85vh;overflow-y:auto;padding:20px;box-shadow:var(--shadow-lg);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <h3 style="margin:0;font-size:17px;">🔎 AI 已纠错的词 (${ids.length})</h3>
+          <button onclick="this.closest('.modal-overlay').remove()" style="border:none;background:none;font-size:18px;cursor:pointer;">✕</button>
+        </div>
+        <p style="font-size:12px;color:var(--color-text-tertiary);margin:0 0 8px;">这些修正保存在本机，会覆盖默认释义。点撤销可恢复。</p>
+        ${listHtml}
+      </div>
+    `;
+    document.body.appendChild(overlay);
+  },
+
+  revertFix(id) {
+    removeWordFix(id);
+    showToast('已撤销该词的修正');
+    document.querySelector('.modal-overlay')?.remove();
+    this.render();
+  },
+
+  async testAI() {
+    showLoading(true);
+    try {
+      const reply = await LLM.chat('你是测试助手', '请只回复两个字：正常');
+      showLoading(false);
+      showToast('AI 连接成功 ✓ ' + reply, 'success');
+    } catch (e) {
+      showLoading(false);
+      showToast('AI 连接失败：' + e.message, 'error');
     }
   }
 };

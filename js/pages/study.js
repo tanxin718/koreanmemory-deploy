@@ -229,6 +229,16 @@ const StudyPage = {
             </div>
           ` : ''}
           
+          <!-- AI 记忆助手 -->
+          <div class="detail-section" style="padding: var(--space-sm); margin: var(--space-sm) 0;">
+            <div class="detail-section__title">🤖 AI 记忆助手</div>
+            <div style="display: flex; gap: var(--space-xs); margin-bottom: var(--space-xs);">
+              <button class="btn-secondary" onclick="StudyPage.aiExplain()" style="flex:1; padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm);">易混词辨析</button>
+              <button class="btn-secondary" onclick="StudyPage.aiExample()" style="flex:1; padding: var(--space-xs) var(--space-sm); font-size: var(--text-sm);">生成新例句</button>
+            </div>
+            <div id="study-ai-result" style="font-size: var(--text-sm); color: var(--color-text-secondary); line-height: 1.7; white-space: pre-wrap;"></div>
+          </div>
+          
           <!-- 笔记 -->
           <div class="detail-section" style="padding: var(--space-sm); margin: var(--space-sm) 0;">
             <div class="detail-section__title">📝 我的笔记</div>
@@ -297,6 +307,65 @@ const StudyPage = {
   showDetails() {
     this.state.showedDetails = true;
     this.renderCard();
+  },
+
+  _aiBusy: false,
+
+  async _aiCall(system, user) {
+    if (!LLM.isConfigured()) {
+      showToast('请先在设置中配置 AI 助手', 'warning');
+      App.navigate('settings');
+      throw new Error('__not_configured__');
+    }
+    if (this._aiBusy) throw new Error('正在生成中，请稍候');
+    this._aiBusy = true;
+    try {
+      return await LLM.chat(system, user, { temperature: 0.7 });
+    } finally {
+      this._aiBusy = false;
+    }
+  },
+
+  async aiExplain() {
+    const word = this.state.words[this.state.currentIndex];
+    const detail = getWordDetail(word.id);
+    const meaningText = detail.meanings.map(m => m.meaning).join('、');
+    // 取关联的易混词作为提示
+    const similar = (detail.relations || []).filter(r => r.relation_type === 'similar').map(r => r.related_word).join('、') || '';
+    const el = document.getElementById('study-ai-result');
+    if (!el) return;
+    el.textContent = '⏳ AI 正在辨析...';
+    try {
+      const text = await this._aiCall(
+        '你是韩语教学专家，擅长给学习者拆解易混词。回答要简明、口语化、用中文+必要韩语。',
+        `单词：${word.word}（${meaningText}）\n请：
+1. 解释这个词的准确含义和常用场景
+2. 若有常见的易混词${similar ? '（已知易混：' + similar + '）' : ''}，逐个对比辨析
+3. 给 1 个能帮助记忆的小技巧（谐音/词根/联想）
+格式用简短段落，每部分换行分隔，总长度适中。`
+      );
+      el.innerHTML = text.replace(/\n/g, '<br>');
+    } catch (e) {
+      if (e.message !== '__not_configured__') el.textContent = '生成失败：' + e.message;
+    }
+  },
+
+  async aiExample() {
+    const word = this.state.words[this.state.currentIndex];
+    const detail = getWordDetail(word.id);
+    const meaningText = detail.meanings.map(m => m.meaning).join('、');
+    const el = document.getElementById('study-ai-result');
+    if (!el) return;
+    el.textContent = '⏳ AI 正在生成例句...';
+    try {
+      const text = await this._aiCall(
+        '你是韩语教学专家，擅长给学习者写简单自然的例句。',
+        `单词：${word.word}（${meaningText}）\n请生成 3 个地道但适合初中级学习者的例句（从易到难），每句格式：\n1. 韩语\n   中文翻译\n并在最后简单说明每个例句的语法或用法要点。`
+      );
+      el.innerHTML = text.replace(/\n/g, '<br>');
+    } catch (e) {
+      if (e.message !== '__not_configured__') el.textContent = '生成失败：' + e.message;
+    }
   },
   
   nextCard() {
